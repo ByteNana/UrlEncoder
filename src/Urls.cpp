@@ -67,29 +67,28 @@ int URLs::extractPort() {
 }
 
 bool URLs::isValid() {
-  _protocol = extractProtocol();
+  resetParsed();
 
-  if (_protocol == "http") {
-    _type = URLType::HTTP;
-  } else if (_protocol == "https") {
-    _type = URLType::HTTPS;
-  } else {
-    _type = URLType::UNKNOWN;
+  const std::string proto = extractProtocol();
+  URLType type = URLType::UNKNOWN;
+  if (proto == "http") {
+    type = URLType::HTTP;
+  } else if (proto == "https") {
+    type = URLType::HTTPS;
   }
-  if (_type == URLType::UNKNOWN) {
+  if (type == URLType::UNKNOWN) {
     log_e("Missing or invalid protocol\n");
     return false;
   }
 
-  _domain = extractDomain();
-  _port = extractPort();
-  if (_domain.find('.') == std::string::npos && _domain != "localhost") {
+  const std::string domain = extractDomain();
+  if (domain.find('.') == std::string::npos && domain != "localhost") {
     log_e("Missing or invalid domain\n");
     return false;
   }
 
-  _path = extractPath();
-  if (_path.empty()) {
+  const std::string path = extractPath();
+  if (path.empty()) {
     log_e("Missing or invalid path\n");
     return false;
   }
@@ -99,6 +98,26 @@ bool URLs::isValid() {
     return false;
   }
 
+  const int port = extractPort();
+  // extractPort() returns -1 for both "no port specified" and "invalid port".
+  // Distinguish them by checking whether the host segment contains a colon.
+  if (port == -1) {
+    const size_t protoEnd = _address.find("://");
+    const size_t hostStart = protoEnd + 3;
+    const size_t hostEnd = _address.find('/', hostStart);
+    const std::string hostSeg = _address.substr(
+        hostStart, hostEnd == std::string::npos ? std::string::npos : hostEnd - hostStart);
+    if (hostSeg.find(':') != std::string::npos) {
+      log_e("Invalid or out-of-range port\n");
+      return false;
+    }
+  }
+
+  _protocol = proto;
+  _type = type;
+  _domain = domain;
+  _port = port;
+  _path = path;
   return true;
 }
 
