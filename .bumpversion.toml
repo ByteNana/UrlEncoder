@@ -1,0 +1,34 @@
+[tool.bumpversion]
+current_version = "1.0.0"
+commit = true
+tag = false
+message = "chore: bump version to {new_version}"
+
+# build is the RC counter: present only when non-zero (e.g. 1.1.0-rc.1).
+# Bumping major/minor/patch resets build to 0, which is optional_value, so
+# it is omitted from serialization and the version stays stable (1.1.0).
+# Bumping build increments the counter: 1.1.0 → 1.1.0-rc.1 → 1.1.0-rc.2.
+parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)(-rc\\.(?P<build>\\d+))?"
+serialize = [
+  "{major}.{minor}.{patch}-rc.{build}",
+  "{major}.{minor}.{patch}"
+]
+
+[tool.bumpversion.parts.build]
+first_value = "0"
+optional_value = "0"
+
+# CMake project() only accepts MAJOR.MINOR.PATCH — always write the stable form.
+# When current_version is "1.1.0-rc.1", {current_version} here expands to "1.1.0"
+# because bumpversion renders the search token using this file's serialize list.
+[[tool.bumpversion.files]]
+filename = "CMakeLists.txt"
+search = "project(UrlEncoder VERSION {current_version}"
+replace = "project(UrlEncoder VERSION {new_version}"
+serialize = ["{major}.{minor}.{patch}"]
+
+# library.json carries the full version including the RC label when present
+[[tool.bumpversion.files]]
+filename = "library.json"
+search = "\"version\": \"{current_version}\""
+replace = "\"version\": \"{new_version}\""

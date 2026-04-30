@@ -12,7 +12,9 @@ endif
 
 CLANG_FORMAT_VERSION := 20.1.8
 
-.PHONY: all build test examples check lint install-deps clean
+PART ?= patch
+
+.PHONY: all build test examples check lint install-deps clean bump
 
 all: build
 
@@ -36,9 +38,12 @@ lint:
 	find src -name "*.cpp" | xargs clang-tidy -p $(BUILD_DIR) $(CLANG_TIDY_SYSROOT)
 
 install-deps:
-	pip3 install clang-format==$(CLANG_FORMAT_VERSION)
+	pip3 install clang-format==$(CLANG_FORMAT_VERSION) bump-my-version
 	cargo install convco
 	lefthook install
+
+bump:
+	bump-my-version bump $(PART)
 
 clean:
 	rm -rf $(BUILD_DIR)
