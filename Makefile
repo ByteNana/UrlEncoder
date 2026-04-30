@@ -10,7 +10,11 @@ else
   CLANG_TIDY_SYSROOT := --extra-arg=--gcc-toolchain=/usr
 endif
 
-.PHONY: all build test examples check lint clean
+CLANG_FORMAT_VERSION := 20.1.8
+
+PART ?= patch
+
+.PHONY: all build test examples check lint install-deps clean bump
 
 all: build
 
@@ -32,6 +36,14 @@ check:
 lint:
 	@test -f $(BUILD_DIR)/compile_commands.json || (echo "Run 'make build' first to generate compile_commands.json" && exit 1)
 	find src -name "*.cpp" | xargs clang-tidy -p $(BUILD_DIR) $(CLANG_TIDY_SYSROOT)
+
+install-deps:
+	pip3 install clang-format==$(CLANG_FORMAT_VERSION) bump-my-version
+	cargo install convco
+	lefthook install
+
+bump:
+	bump-my-version bump $(PART)
 
 clean:
 	rm -rf $(BUILD_DIR)
