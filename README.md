@@ -65,6 +65,8 @@ auto client = url.getClient();  // shared_ptr<WiFiClientSecure>
 ```cpp
 URLs url("https://example.com/path");   // const char*
 URLs url(someArduinoString);            // const String&
+URLs url(someStdString);                // const std::string&
+URLs url(std::move(someStdString));     // std::string&&
 URLs url;                               // default, use setAddress() before anything
 ```
 
@@ -74,7 +76,7 @@ URLs url;                               // default, use setAddress() before anyt
 |---|---|---|
 | `isValid()` | `bool` | Parses the address and validates it. Populates all getters. |
 | `encode()` | `bool` | Percent-encodes `_address` in place, then calls `isValid()`. |
-| `getClient()` | `shared_ptr<Client>` | Calls the factory with `secure=true/false`. Returns `nullptr` if no factory is set. |
+| `getClient()` | `shared_ptr<Client>` | Calls the factory with `secure=true/false`. Returns `nullptr` if no factory is set or if `isValid()` has not been called yet. |
 
 ### Setters
 

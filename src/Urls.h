@@ -31,6 +31,14 @@ class URLs {
   std::string extractPath();
   int extractPort();
 
+  void resetParsed() {
+    _protocol.clear();
+    _domain.clear();
+    _path.clear();
+    _port = -1;
+    _type = URLType::UNKNOWN;
+  };
+
  public:
   URLs(const char *address) : _address(address) {};
   URLs(const String &address) : _address(address.c_str()) {};
@@ -43,10 +51,22 @@ class URLs {
 
   bool isValid();
   bool encode();
-  void setAddress(const char *address) { _address = address; };
-  void setAddress(const String &address) { _address = address.c_str(); };
-  void setAddress(const std::string &address) { _address = address; };
-  void setAddress(std::string &&address) { _address = std::move(address); };
+  void setAddress(const std::string &address) {
+    _address = address;
+    resetParsed();
+  };
+  void setAddress(std::string &&address) {
+    _address = std::move(address);
+    resetParsed();
+  };
+  void setAddress(const char *address) {
+    _address = address;
+    resetParsed();
+  };
+  void setAddress(const String &address) {
+    _address = address.c_str();
+    resetParsed();
+  };
   const char *getProtocol() { return _protocol.c_str(); };
   const char *getDomain() { return _domain.c_str(); };
   const char *getAddress() { return _address.c_str(); };
@@ -54,6 +74,7 @@ class URLs {
   URLType getType() { return _type; };
   bool isSecure() { return _type == URLType::HTTPS; };
   int getPort() {
+    if (_type == URLType::UNKNOWN) return -1;
     if (_port != -1) return _port;
     return _type == URLType::HTTP ? 80 : 443;
   };

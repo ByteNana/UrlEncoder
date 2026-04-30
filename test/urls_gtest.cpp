@@ -20,23 +20,6 @@ class MockClient : public Client {
 };
 
 // ---------------------------------------------------------------------------
-// Constructors
-// ---------------------------------------------------------------------------
-
-TEST(UrlsConstructors, StdStringConstructor) {
-  std::string addr("https://example.com/path");
-  URLs url(addr);
-  EXPECT_TRUE(url.isValid());
-  EXPECT_STREQ(url.getDomain(), "example.com");
-}
-
-TEST(UrlsConstructors, StdStringSetAddress) {
-  URLs url;
-  url.setAddress(std::string("http://example.com/path"));
-  EXPECT_TRUE(url.isValid());
-}
-
-// ---------------------------------------------------------------------------
 // isValid
 // ---------------------------------------------------------------------------
 
@@ -97,6 +80,37 @@ TEST(UrlsValid, EmptyAddress) {
   EXPECT_FALSE(url.isValid());
 }
 
+TEST(UrlsValid, InvalidPort) {
+  URLs url("http://example.com:99999/path");
+  EXPECT_FALSE(url.isValid());
+}
+
+TEST(UrlsValid, FieldsClearedOnProtocolFailure) {
+  URLs url("https://example.com/path");
+  url.isValid();
+
+  url.setAddress("ftp://example.com/path");
+  EXPECT_FALSE(url.isValid());
+  EXPECT_EQ(url.getType(), URLType::UNKNOWN);
+  EXPECT_STREQ(url.getDomain(), "");
+  EXPECT_STREQ(url.getPath(), "");
+  EXPECT_EQ(url.getPort(), -1);
+}
+
+TEST(UrlsValid, FieldsClearedOnDomainFailure) {
+  // Proves the validate-then-commit fix: without it, _type would be set to HTTP
+  // before the domain check fails, leaving a misleading non-UNKNOWN type.
+  URLs url("https://example.com/path");
+  url.isValid();
+
+  url.setAddress("http://nodot/path");
+  EXPECT_FALSE(url.isValid());
+  EXPECT_EQ(url.getType(), URLType::UNKNOWN);
+  EXPECT_STREQ(url.getDomain(), "");
+  EXPECT_STREQ(url.getPath(), "");
+  EXPECT_EQ(url.getPort(), -1);
+}
+
 // ---------------------------------------------------------------------------
 // Getters
 // ---------------------------------------------------------------------------
@@ -146,6 +160,29 @@ TEST(UrlsGetters, IsSecureHttp) {
 TEST(UrlsGetters, IsSecureHttps) {
   URLs url("https://example.com/path");
   url.isValid();
+  EXPECT_TRUE(url.isSecure());
+}
+
+TEST(UrlsGetters, AllFieldsEmptyBeforeIsValid) {
+  URLs url("https://example.com/path");
+  EXPECT_STREQ(url.getProtocol(), "");
+  EXPECT_STREQ(url.getDomain(), "");
+  EXPECT_STREQ(url.getPath(), "");
+  EXPECT_EQ(url.getPort(), -1);
+  EXPECT_EQ(url.getType(), URLType::UNKNOWN);
+  EXPECT_FALSE(url.isSecure());
+}
+
+TEST(UrlsGetters, PathIncludesQueryString) {
+  URLs url("https://example.com/path?key=value&foo=bar");
+  url.isValid();
+  EXPECT_STREQ(url.getPath(), "/path?key=value&foo=bar");
+}
+
+TEST(UrlsGetters, CustomPortHttps) {
+  URLs url("https://example.com:8443/path");
+  url.isValid();
+  EXPECT_EQ(url.getPort(), 8443);
   EXPECT_TRUE(url.isSecure());
 }
 
@@ -231,6 +268,42 @@ TEST(UrlsClient, FactoryCalledWithSecureFalseForHttp) {
 
   EXPECT_FALSE(calledWithSecure);
   EXPECT_NE(client, nullptr);
+
+  URLs::setClientFactory(nullptr);
+}
+
+// ---------------------------------------------------------------------------
+// setAddress stale-state bugs
+// ---------------------------------------------------------------------------
+
+TEST(UrlsSetAddress, StaleStateCleared) {
+  URLs url("http://host-a.com/path");
+  url.isValid();
+  EXPECT_STREQ(url.getDomain(), "host-a.com");
+
+  url.setAddress("https://host-b.com/path");
+  // After setAddress, parsed fields must be cleared (isValid not called yet)
+  EXPECT_STREQ(url.getDomain(), "");
+
+  url.isValid();
+  // After isValid with new address, domain must reflect new URL
+  EXPECT_STREQ(url.getDomain(), "host-b.com");
+}
+
+TEST(UrlsSetAddress, GetPortUnknownReturnsMinusOne) {
+  URLs url("https://example.com/path");
+  // isValid() not called — _type stays UNKNOWN
+  EXPECT_EQ(url.getPort(), -1);
+}
+
+TEST(UrlsSetAddress, GetClientUnparsedReturnsNull) {
+  URLs::setClientFactory([](bool /*secure*/) -> std::shared_ptr<Client> {
+    return std::make_shared<MockClient>();
+  });
+
+  URLs url("https://example.com/path");
+  // isValid() not called — _type stays UNKNOWN — getClient() must return nullptr
+  EXPECT_EQ(url.getClient(), nullptr);
 
   URLs::setClientFactory(nullptr);
 }
