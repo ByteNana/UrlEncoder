@@ -147,7 +147,8 @@ std::shared_ptr<Client> URLs::getClient() {
   }
   auto &factory = _instanceFactory ? _instanceFactory : _defaultFactory;
   if (!factory) {
-    log_e("No client factory set. Call URLs::setDefaultFactory() or setClientFactory() first.\n");
+    log_e(
+        "No client factory set. Call URLs::setDefaultFactory() or url.setClientFactory() first.\n");
     return nullptr;
   }
   return factory(isSecure());
