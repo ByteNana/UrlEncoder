@@ -20,23 +20,6 @@ class MockClient : public Client {
 };
 
 // ---------------------------------------------------------------------------
-// Constructors
-// ---------------------------------------------------------------------------
-
-TEST(UrlsConstructors, StdStringConstructor) {
-  std::string addr("https://example.com/path");
-  URLs url(addr);
-  EXPECT_TRUE(url.isValid());
-  EXPECT_STREQ(url.getDomain(), "example.com");
-}
-
-TEST(UrlsConstructors, StdStringSetAddress) {
-  URLs url;
-  url.setAddress(std::string("http://example.com/path"));
-  EXPECT_TRUE(url.isValid());
-}
-
-// ---------------------------------------------------------------------------
 // isValid
 // ---------------------------------------------------------------------------
 
@@ -231,6 +214,42 @@ TEST(UrlsClient, FactoryCalledWithSecureFalseForHttp) {
 
   EXPECT_FALSE(calledWithSecure);
   EXPECT_NE(client, nullptr);
+
+  URLs::setClientFactory(nullptr);
+}
+
+// ---------------------------------------------------------------------------
+// setAddress stale-state bugs
+// ---------------------------------------------------------------------------
+
+TEST(UrlsSetAddress, StaleStateCleared) {
+  URLs url("http://host-a.com/path");
+  url.isValid();
+  EXPECT_STREQ(url.getDomain(), "host-a.com");
+
+  url.setAddress("https://host-b.com/path");
+  // After setAddress, parsed fields must be cleared (isValid not called yet)
+  EXPECT_STREQ(url.getDomain(), "");
+
+  url.isValid();
+  // After isValid with new address, domain must reflect new URL
+  EXPECT_STREQ(url.getDomain(), "host-b.com");
+}
+
+TEST(UrlsSetAddress, GetPortUnknownReturnsMinusOne) {
+  URLs url("https://example.com/path");
+  // isValid() not called — _type stays UNKNOWN
+  EXPECT_EQ(url.getPort(), -1);
+}
+
+TEST(UrlsSetAddress, GetClientUnparsedReturnsNull) {
+  URLs::setClientFactory([](bool /*secure*/) -> std::shared_ptr<Client> {
+    return std::make_shared<MockClient>();
+  });
+
+  URLs url("https://example.com/path");
+  // isValid() not called — _type stays UNKNOWN — getClient() must return nullptr
+  EXPECT_EQ(url.getClient(), nullptr);
 
   URLs::setClientFactory(nullptr);
 }

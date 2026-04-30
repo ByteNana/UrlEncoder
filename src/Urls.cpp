@@ -126,5 +126,9 @@ std::shared_ptr<Client> URLs::getClient() {
     log_e("No client factory set. Call URLs::setClientFactory() first.\n");
     return nullptr;
   }
+  if (_type == URLType::UNKNOWN) {
+    log_e("URL not yet parsed. Call isValid() first.\n");
+    return nullptr;
+  }
   return _clientFactory(_type == URLType::HTTPS);
 }
