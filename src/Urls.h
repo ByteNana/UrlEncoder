@@ -11,6 +11,8 @@
 
 #include <functional>
 #include <memory>
+#include <string>
+#include <utility>
 
 enum class URLType : uint8_t { HTTP, HTTPS, UNKNOWN };
 
@@ -44,6 +46,7 @@ class URLs {
   void setAddress(const char *address) { _address = address; };
   void setAddress(const String &address) { _address = address.c_str(); };
   void setAddress(const std::string &address) { _address = address; };
+  void setAddress(std::string &&address) { _address = std::move(address); };
   const char *getProtocol() { return _protocol.c_str(); };
   const char *getDomain() { return _domain.c_str(); };
   const char *getAddress() { return _address.c_str(); };
