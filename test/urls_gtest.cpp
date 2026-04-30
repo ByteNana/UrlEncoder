@@ -227,6 +227,20 @@ TEST(UrlsEncode, UpdatesAddress) {
   EXPECT_STREQ(url.getAddress(), "https://example.com/hello%20world");
 }
 
+TEST(UrlsEncode, EncodeIdempotent) {
+  URLs url("https://example.com/hello world");
+  url.encode();
+  std::string first(url.getAddress());
+  url.encode();
+  EXPECT_STREQ(url.getAddress(), first.c_str());
+}
+
+TEST(UrlsEncode, PreservesExistingEscapes) {
+  URLs url("https://example.com/hello%20world");
+  url.encode();
+  EXPECT_STREQ(url.getAddress(), "https://example.com/hello%20world");
+}
+
 // ---------------------------------------------------------------------------
 // getClient / factory
 // ---------------------------------------------------------------------------
