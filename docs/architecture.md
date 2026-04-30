@@ -32,10 +32,11 @@ extractPort()      ──►  reads "host:port" segment, validates 1-65535
    │
    ▼
 isValid()  assembles parsed fields, rejects unknown protocol /
-           missing domain dot / spaces in the address
+           missing domain dot / spaces in the address /
+           explicitly specified but out-of-range port
 ```
 
-`isValid()` is intentionally destructive-accumulating: it overwrites `_protocol`, `_domain`, `_path`, `_port`, and `_type` every time it is called, which makes re-validation after `setAddress()` safe.
+`isValid()` uses a validate-then-commit pattern: it calls `resetParsed()` first, then validates each component into local variables, and only assigns to member fields (`_protocol`, `_domain`, `_path`, `_port`, `_type`) when all checks pass. A failed intermediate check leaves all fields at their reset defaults — no partial state.
 
 ## encode()
 
@@ -93,3 +94,4 @@ Test groups:
 | `UrlsGetters` | parsed field values after `isValid()` |
 | `UrlsEncode` | space/special-char encoding, query-string preservation, address update |
 | `UrlsClient` | factory null guard, `secure=true` for HTTPS, `secure=false` for HTTP |
+| `UrlsSetAddress` | stale-state cleared on `setAddress()`, `-1` port and `nullptr` client before `isValid()` |
