@@ -1,6 +1,6 @@
 {
   "name": "Urls",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "URL parser, validator, and encoder for Arduino/ESP32 projects",
   "keywords": ["url", "encoder", "parser", "http", "https"],
   "repository": {
