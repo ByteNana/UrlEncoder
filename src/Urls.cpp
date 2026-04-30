@@ -126,13 +126,15 @@ bool URLs::encode() {
   std::string encoded;
   const char *msg = _address.c_str();
   while (*msg != '\0') {
-    if (*msg == '%' && (isxdigit(*(msg + 1)) != 0) && (isxdigit(*(msg + 2)) != 0)) {
+    if (*msg == '%' && *(msg + 1) != '\0' && *(msg + 2) != '\0' &&
+        (isxdigit((unsigned char)*(msg + 1)) != 0) && (isxdigit((unsigned char)*(msg + 2)) != 0)) {
       encoded += *msg++;
       encoded += *msg++;
       encoded += *msg;
     } else if (
-        (isalnum(*msg) != 0) || *msg == '-' || *msg == '_' || *msg == '.' || *msg == '~' ||
-        *msg == '/' || *msg == ':' || *msg == '?' || *msg == '&' || *msg == '=' || *msg == '#') {
+        (isalnum((unsigned char)*msg) != 0) || *msg == '-' || *msg == '_' || *msg == '.' ||
+        *msg == '~' || *msg == '/' || *msg == ':' || *msg == '?' || *msg == '&' || *msg == '=' ||
+        *msg == '#') {
       encoded += *msg;
     } else {
       encoded += '%';
@@ -153,7 +155,8 @@ std::shared_ptr<Client> URLs::getClient() {
   auto &factory = _instanceFactory ? _instanceFactory : _defaultFactory;
   if (!factory) {
     log_e(
-        "No client factory set. Call URLs::setDefaultFactory() or url.setClientFactory() first.\n");
+        "No client factory set. Call URLs::setDefaultFactory() or url.setInstanceFactory() "
+        "first.\n");
     return nullptr;
   }
   return factory(isSecure());

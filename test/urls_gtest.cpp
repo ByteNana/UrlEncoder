@@ -301,7 +301,7 @@ TEST(UrlsClientLayered, InstanceFactoryOverridesDefault) {
 
   URLs url("https://example.com/path");
   url.isValid();
-  url.setClientFactory([&](bool /*secure*/) -> std::shared_ptr<Client> {
+  url.setInstanceFactory([&](bool /*secure*/) -> std::shared_ptr<Client> {
     instanceCalled = true;
     return std::make_shared<MockClient>();
   });
@@ -394,11 +394,11 @@ TEST(UrlsClientLayered, ClearInstanceFactoryFallsBackToDefault) {
 
   URLs url("https://example.com/path");
   url.isValid();
-  url.setClientFactory([&](bool /*secure*/) -> std::shared_ptr<Client> {
+  url.setInstanceFactory([&](bool /*secure*/) -> std::shared_ptr<Client> {
     instanceCalled = true;
     return std::make_shared<MockClient>();
   });
-  url.setClientFactory(nullptr);
+  url.setInstanceFactory(nullptr);
   url.getClient();
 
   EXPECT_TRUE(defaultCalled);
@@ -412,7 +412,7 @@ TEST(UrlsClientLayered, InstanceFactorySecureFlagHttps) {
 
   URLs url("https://example.com/path");
   url.isValid();
-  url.setClientFactory([&](bool secure) -> std::shared_ptr<Client> {
+  url.setInstanceFactory([&](bool secure) -> std::shared_ptr<Client> {
     calledWithSecure = secure;
     return std::make_shared<MockClient>();
   });
@@ -426,7 +426,7 @@ TEST(UrlsClientLayered, InstanceFactorySecureFlagHttp) {
 
   URLs url("http://example.com/path");
   url.isValid();
-  url.setClientFactory([&](bool secure) -> std::shared_ptr<Client> {
+  url.setInstanceFactory([&](bool secure) -> std::shared_ptr<Client> {
     calledWithSecure = secure;
     return std::make_shared<MockClient>();
   });
@@ -446,7 +446,7 @@ TEST(UrlsClientLayered, InstanceFactoryIsolatedBetweenObjects) {
 
   URLs urlA("https://example.com/path");
   urlA.isValid();
-  urlA.setClientFactory([&](bool /*secure*/) -> std::shared_ptr<Client> {
+  urlA.setInstanceFactory([&](bool /*secure*/) -> std::shared_ptr<Client> {
     instanceCalled = true;
     return std::make_shared<MockClient>();
   });

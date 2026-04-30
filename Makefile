@@ -38,7 +38,8 @@ format:
 
 lint:
 	@test -f $(BUILD_DIR)/compile_commands.json || (echo "Run 'make build' first to generate compile_commands.json" && exit 1)
-	find src -name "*.cpp" | xargs clang-tidy -p $(BUILD_DIR) $(CLANG_TIDY_SYSROOT)
+	find src -name "*.cpp" | xargs clang-tidy -p $(BUILD_DIR) $(CLANG_TIDY_SYSROOT) \
+		--extra-arg=-I$(BUILD_DIR)/_deps/arduinomock-src/src
 
 install-deps:
 	pip3 install clang-format==$(CLANG_FORMAT_VERSION) bump-my-version
