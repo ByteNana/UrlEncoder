@@ -7,7 +7,7 @@ Arduino/ESP32 library for parsing, validating, and percent-encoding HTTP/HTTPS U
 - Parses protocol, domain, path, and port from a URL string
 - Validates HTTP/HTTPS scheme, domain format, and absence of unencoded spaces
 - Percent-encodes unsafe characters in place, preserving query-string delimiters (`?`, `&`, `=`, `#`)
-- Returns a `std::shared_ptr<Client>` via a static factory — decoupled from any specific network stack
+- Returns a `std::shared_ptr<Client>` via a layered factory — a static default shared across all instances, overridable per-instance or at construction time
 - C++11, no heap allocation beyond `std::string`
 
 ## Installation
@@ -38,7 +38,7 @@ target_link_libraries(your_target PRIVATE UrlEncoder)
 #include "Urls.h"
 
 // Call once at boot, before any URLs instance is used
-URLs::setClientFactory([](bool secure) -> std::shared_ptr<Client> {
+URLs::setDefaultFactory([](bool secure) -> std::shared_ptr<Client> {
   if (secure) return std::make_shared<WiFiClientSecure>();
   return std::make_shared<WiFiClient>();
 });
@@ -65,6 +65,8 @@ auto client = url.getClient();  // shared_ptr<WiFiClientSecure>
 ```cpp
 URLs url("https://example.com/path");   // const char*
 URLs url(someArduinoString);            // const String&
+URLs url(someStdString);                // const std::string&
+URLs url(std::move(someStdString));     // std::string&&
 URLs url;                               // default, use setAddress() before anything
 ```
 
@@ -74,7 +76,7 @@ URLs url;                               // default, use setAddress() before anyt
 |---|---|---|
 | `isValid()` | `bool` | Parses the address and validates it. Populates all getters. |
 | `encode()` | `bool` | Percent-encodes `_address` in place, then calls `isValid()`. |
-| `getClient()` | `shared_ptr<Client>` | Calls the factory with `secure=true/false`. Returns `nullptr` if no factory is set. |
+| `getClient()` | `shared_ptr<Client>` | Calls the factory with `secure=true/false`. Returns `nullptr` if no factory is set or if `isValid()` has not been called yet. |
 
 ### Setters
 
@@ -98,13 +100,23 @@ url.getAddress()   // current address string (encoded after encode())
 
 ### Client factory
 
+The factory resolves in priority order: **instance factory → default factory**.
+
 ```cpp
-URLs::setClientFactory([](bool secure) -> std::shared_ptr<Client> {
-  ...
+// Global default — shared across all URLs instances (set once at boot)
+URLs::setDefaultFactory([](bool secure) -> std::shared_ptr<Client> {
+  if (secure) return std::make_shared<WiFiClientSecure>();
+  return std::make_shared<WiFiClient>();
 });
+
+// Per-instance override — set after construction or injected at construction
+url.setInstanceFactory([](bool secure) -> std::shared_ptr<Client> { ... });
+
+// Constructor injection — instance factory set at construction time
+URLs url("https://example.com/path", [](bool secure) -> std::shared_ptr<Client> { ... });
 ```
 
-Set once. All `URLs` instances share it. Pass `nullptr` to clear.
+Pass `nullptr` to `setInstanceFactory()` to clear the per-instance override and fall back to the default. Pass `nullptr` to `setDefaultFactory()` to remove the global factory entirely — no fallback exists in that case.
 
 ## Development
 

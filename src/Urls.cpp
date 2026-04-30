@@ -2,10 +2,10 @@
 
 #include <esp_log.h>
 
-std::function<std::shared_ptr<Client>(bool secure)> URLs::_clientFactory = nullptr;
+std::function<std::shared_ptr<Client>(bool secure)> URLs::_defaultFactory = nullptr;
 
-void URLs::setClientFactory(std::function<std::shared_ptr<Client>(bool secure)> factory) noexcept {
-  _clientFactory = std::move(factory);
+void URLs::setDefaultFactory(std::function<std::shared_ptr<Client>(bool secure)> factory) noexcept {
+  _defaultFactory = std::move(factory);
 }
 
 std::string URLs::extractProtocol() {
@@ -67,29 +67,28 @@ int URLs::extractPort() {
 }
 
 bool URLs::isValid() {
-  _protocol = extractProtocol();
+  resetParsed();
 
-  if (_protocol == "http") {
-    _type = URLType::HTTP;
-  } else if (_protocol == "https") {
-    _type = URLType::HTTPS;
-  } else {
-    _type = URLType::UNKNOWN;
+  const std::string proto = extractProtocol();
+  URLType type = URLType::UNKNOWN;
+  if (proto == "http") {
+    type = URLType::HTTP;
+  } else if (proto == "https") {
+    type = URLType::HTTPS;
   }
-  if (_type == URLType::UNKNOWN) {
+  if (type == URLType::UNKNOWN) {
     log_e("Missing or invalid protocol\n");
     return false;
   }
 
-  _domain = extractDomain();
-  _port = extractPort();
-  if (_domain.find('.') == std::string::npos && _domain != "localhost") {
+  const std::string domain = extractDomain();
+  if (domain.find('.') == std::string::npos && domain != "localhost") {
     log_e("Missing or invalid domain\n");
     return false;
   }
 
-  _path = extractPath();
-  if (_path.empty()) {
+  const std::string path = extractPath();
+  if (path.empty()) {
     log_e("Missing or invalid path\n");
     return false;
   }
@@ -99,6 +98,26 @@ bool URLs::isValid() {
     return false;
   }
 
+  const int port = extractPort();
+  // extractPort() returns -1 for both "no port specified" and "invalid port".
+  // Distinguish them by checking whether the host segment contains a colon.
+  if (port == -1) {
+    const size_t protoEnd = _address.find("://");
+    const size_t hostStart = protoEnd + 3;
+    const size_t hostEnd = _address.find('/', hostStart);
+    const std::string hostSeg = _address.substr(
+        hostStart, hostEnd == std::string::npos ? std::string::npos : hostEnd - hostStart);
+    if (hostSeg.find(':') != std::string::npos) {
+      log_e("Invalid or out-of-range port\n");
+      return false;
+    }
+  }
+
+  _protocol = proto;
+  _type = type;
+  _domain = domain;
+  _port = port;
+  _path = path;
   return true;
 }
 
@@ -107,8 +126,15 @@ bool URLs::encode() {
   std::string encoded;
   const char *msg = _address.c_str();
   while (*msg != '\0') {
-    if ((isalnum(*msg) != 0) || *msg == '-' || *msg == '_' || *msg == '.' || *msg == '~' ||
-        *msg == '/' || *msg == ':' || *msg == '?' || *msg == '&' || *msg == '=' || *msg == '#') {
+    if (*msg == '%' && *(msg + 1) != '\0' && *(msg + 2) != '\0' &&
+        (isxdigit((unsigned char)*(msg + 1)) != 0) && (isxdigit((unsigned char)*(msg + 2)) != 0)) {
+      encoded += *msg++;
+      encoded += *msg++;
+      encoded += *msg;
+    } else if (
+        (isalnum((unsigned char)*msg) != 0) || *msg == '-' || *msg == '_' || *msg == '.' ||
+        *msg == '~' || *msg == '/' || *msg == ':' || *msg == '?' || *msg == '&' || *msg == '=' ||
+        *msg == '#') {
       encoded += *msg;
     } else {
       encoded += '%';
@@ -122,9 +148,16 @@ bool URLs::encode() {
 }
 
 std::shared_ptr<Client> URLs::getClient() {
-  if (!_clientFactory) {
-    log_e("No client factory set. Call URLs::setClientFactory() first.\n");
+  if (_type == URLType::UNKNOWN) {
+    log_e("URL not yet parsed. Call isValid() first.\n");
     return nullptr;
   }
-  return _clientFactory(_type == URLType::HTTPS);
+  auto &factory = _instanceFactory ? _instanceFactory : _defaultFactory;
+  if (!factory) {
+    log_e(
+        "No client factory set. Call URLs::setDefaultFactory() or url.setInstanceFactory() "
+        "first.\n");
+    return nullptr;
+  }
+  return factory(isSecure());
 }

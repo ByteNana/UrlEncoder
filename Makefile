@@ -14,7 +14,7 @@ CLANG_FORMAT_VERSION := 20.1.8
 
 PART ?= patch
 
-.PHONY: all build test examples check lint install-deps clean bump
+.PHONY: all build test examples check format lint install-deps clean bump
 
 all: build
 
@@ -33,9 +33,13 @@ examples:
 check:
 	find src examples -name "*.cpp" -o -name "*.h" | xargs clang-format --dry-run --Werror
 
+format:
+	find src examples -name "*.cpp" -o -name "*.h" | xargs clang-format -i
+
 lint:
 	@test -f $(BUILD_DIR)/compile_commands.json || (echo "Run 'make build' first to generate compile_commands.json" && exit 1)
-	find src -name "*.cpp" | xargs clang-tidy -p $(BUILD_DIR) $(CLANG_TIDY_SYSROOT)
+	find src -name "*.cpp" | xargs clang-tidy -p $(BUILD_DIR) $(CLANG_TIDY_SYSROOT) \
+		--extra-arg=-I$(BUILD_DIR)/_deps/arduinomock-src/src
 
 install-deps:
 	pip3 install clang-format==$(CLANG_FORMAT_VERSION) bump-my-version

@@ -1,0 +1,37 @@
+name: Drop RC Version Suffix
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  drop-rc-suffix:
+    name: Drop RC suffix from version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Install bump-my-version
+        run: pip3 install bump-my-version
+
+      - name: Drop RC suffix if present
+        run: |
+          VERSION=$(grep 'current_version' .bumpversion.toml | head -1 | sed 's/.*= *"//' | sed 's/"//')
+          echo "Current version: ${VERSION}"
+          if [[ "${VERSION}" != *"-rc."* ]]; then
+            echo "Already on stable version — nothing to do."
+            exit 0
+          fi
+          STABLE="${VERSION%%-rc.*}"
+          echo "Bumping to stable: ${STABLE}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          bump-my-version bump --new-version "${STABLE}"
+          git push

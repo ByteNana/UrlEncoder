@@ -80,6 +80,37 @@ TEST(UrlsValid, EmptyAddress) {
   EXPECT_FALSE(url.isValid());
 }
 
+TEST(UrlsValid, InvalidPort) {
+  URLs url("http://example.com:99999/path");
+  EXPECT_FALSE(url.isValid());
+}
+
+TEST(UrlsValid, FieldsClearedOnProtocolFailure) {
+  URLs url("https://example.com/path");
+  url.isValid();
+
+  url.setAddress("ftp://example.com/path");
+  EXPECT_FALSE(url.isValid());
+  EXPECT_EQ(url.getType(), URLType::UNKNOWN);
+  EXPECT_STREQ(url.getDomain(), "");
+  EXPECT_STREQ(url.getPath(), "");
+  EXPECT_EQ(url.getPort(), -1);
+}
+
+TEST(UrlsValid, FieldsClearedOnDomainFailure) {
+  // Proves the validate-then-commit fix: without it, _type would be set to HTTP
+  // before the domain check fails, leaving a misleading non-UNKNOWN type.
+  URLs url("https://example.com/path");
+  url.isValid();
+
+  url.setAddress("http://nodot/path");
+  EXPECT_FALSE(url.isValid());
+  EXPECT_EQ(url.getType(), URLType::UNKNOWN);
+  EXPECT_STREQ(url.getDomain(), "");
+  EXPECT_STREQ(url.getPath(), "");
+  EXPECT_EQ(url.getPort(), -1);
+}
+
 // ---------------------------------------------------------------------------
 // Getters
 // ---------------------------------------------------------------------------
@@ -132,6 +163,29 @@ TEST(UrlsGetters, IsSecureHttps) {
   EXPECT_TRUE(url.isSecure());
 }
 
+TEST(UrlsGetters, AllFieldsEmptyBeforeIsValid) {
+  URLs url("https://example.com/path");
+  EXPECT_STREQ(url.getProtocol(), "");
+  EXPECT_STREQ(url.getDomain(), "");
+  EXPECT_STREQ(url.getPath(), "");
+  EXPECT_EQ(url.getPort(), -1);
+  EXPECT_EQ(url.getType(), URLType::UNKNOWN);
+  EXPECT_FALSE(url.isSecure());
+}
+
+TEST(UrlsGetters, PathIncludesQueryString) {
+  URLs url("https://example.com/path?key=value&foo=bar");
+  url.isValid();
+  EXPECT_STREQ(url.getPath(), "/path?key=value&foo=bar");
+}
+
+TEST(UrlsGetters, CustomPortHttps) {
+  URLs url("https://example.com:8443/path");
+  url.isValid();
+  EXPECT_EQ(url.getPort(), 8443);
+  EXPECT_TRUE(url.isSecure());
+}
+
 // ---------------------------------------------------------------------------
 // encode
 // ---------------------------------------------------------------------------
@@ -173,12 +227,26 @@ TEST(UrlsEncode, UpdatesAddress) {
   EXPECT_STREQ(url.getAddress(), "https://example.com/hello%20world");
 }
 
+TEST(UrlsEncode, EncodeIdempotent) {
+  URLs url("https://example.com/hello world");
+  url.encode();
+  std::string first(url.getAddress());
+  url.encode();
+  EXPECT_STREQ(url.getAddress(), first.c_str());
+}
+
+TEST(UrlsEncode, PreservesExistingEscapes) {
+  URLs url("https://example.com/hello%20world");
+  url.encode();
+  EXPECT_STREQ(url.getAddress(), "https://example.com/hello%20world");
+}
+
 // ---------------------------------------------------------------------------
 // getClient / factory
 // ---------------------------------------------------------------------------
 
 TEST(UrlsClient, ReturnsNullWithoutFactory) {
-  URLs::setClientFactory(nullptr);
+  URLs::setDefaultFactory(nullptr);
   URLs url("https://example.com/path");
   url.isValid();
   EXPECT_EQ(url.getClient(), nullptr);
@@ -186,7 +254,7 @@ TEST(UrlsClient, ReturnsNullWithoutFactory) {
 
 TEST(UrlsClient, FactoryCalledWithSecureTrueForHttps) {
   bool calledWithSecure = false;
-  URLs::setClientFactory([&](bool secure) -> std::shared_ptr<Client> {
+  URLs::setDefaultFactory([&](bool secure) -> std::shared_ptr<Client> {
     calledWithSecure = secure;
     return std::make_shared<MockClient>();
   });
@@ -198,12 +266,12 @@ TEST(UrlsClient, FactoryCalledWithSecureTrueForHttps) {
   EXPECT_TRUE(calledWithSecure);
   EXPECT_NE(client, nullptr);
 
-  URLs::setClientFactory(nullptr);
+  URLs::setDefaultFactory(nullptr);
 }
 
 TEST(UrlsClient, FactoryCalledWithSecureFalseForHttp) {
   bool calledWithSecure = true;
-  URLs::setClientFactory([&](bool secure) -> std::shared_ptr<Client> {
+  URLs::setDefaultFactory([&](bool secure) -> std::shared_ptr<Client> {
     calledWithSecure = secure;
     return std::make_shared<MockClient>();
   });
@@ -215,5 +283,217 @@ TEST(UrlsClient, FactoryCalledWithSecureFalseForHttp) {
   EXPECT_FALSE(calledWithSecure);
   EXPECT_NE(client, nullptr);
 
-  URLs::setClientFactory(nullptr);
+  URLs::setDefaultFactory(nullptr);
+}
+
+// ---------------------------------------------------------------------------
+// getClient / layered factory resolution
+// ---------------------------------------------------------------------------
+
+TEST(UrlsClientLayered, InstanceFactoryOverridesDefault) {
+  bool defaultCalled = false;
+  bool instanceCalled = false;
+
+  URLs::setDefaultFactory([&](bool /*secure*/) -> std::shared_ptr<Client> {
+    defaultCalled = true;
+    return std::make_shared<MockClient>();
+  });
+
+  URLs url("https://example.com/path");
+  url.isValid();
+  url.setInstanceFactory([&](bool /*secure*/) -> std::shared_ptr<Client> {
+    instanceCalled = true;
+    return std::make_shared<MockClient>();
+  });
+
+  auto client = url.getClient();
+
+  EXPECT_TRUE(instanceCalled);
+  EXPECT_FALSE(defaultCalled);
+  EXPECT_NE(client, nullptr);
+
+  URLs::setDefaultFactory(nullptr);
+}
+
+TEST(UrlsClientLayered, DefaultFactoryUsedWhenNoInstance) {
+  bool defaultCalled = false;
+
+  URLs::setDefaultFactory([&](bool /*secure*/) -> std::shared_ptr<Client> {
+    defaultCalled = true;
+    return std::make_shared<MockClient>();
+  });
+
+  URLs url("https://example.com/path");
+  url.isValid();
+  auto client = url.getClient();
+
+  EXPECT_TRUE(defaultCalled);
+  EXPECT_NE(client, nullptr);
+
+  URLs::setDefaultFactory(nullptr);
+}
+
+TEST(UrlsClientLayered, ConstructorInjection) {
+  bool injectedCalled = false;
+
+  URLs url("https://example.com/path", [&](bool /*secure*/) -> std::shared_ptr<Client> {
+    injectedCalled = true;
+    return std::make_shared<MockClient>();
+  });
+  url.isValid();
+  auto client = url.getClient();
+
+  EXPECT_TRUE(injectedCalled);
+  EXPECT_NE(client, nullptr);
+}
+
+TEST(UrlsClientLayered, ConstructorInjectionOverridesDefault) {
+  bool defaultCalled = false;
+  bool injectedCalled = false;
+
+  URLs::setDefaultFactory([&](bool /*secure*/) -> std::shared_ptr<Client> {
+    defaultCalled = true;
+    return std::make_shared<MockClient>();
+  });
+
+  URLs url("https://example.com/path", [&](bool /*secure*/) -> std::shared_ptr<Client> {
+    injectedCalled = true;
+    return std::make_shared<MockClient>();
+  });
+  url.isValid();
+  url.getClient();
+
+  EXPECT_TRUE(injectedCalled);
+  EXPECT_FALSE(defaultCalled);
+
+  URLs::setDefaultFactory(nullptr);
+}
+
+TEST(UrlsClientLayered, ConstructorInjectionStdString) {
+  bool injectedCalled = false;
+  std::string addr("https://example.com/path");
+
+  URLs url(addr, [&](bool /*secure*/) -> std::shared_ptr<Client> {
+    injectedCalled = true;
+    return std::make_shared<MockClient>();
+  });
+  url.isValid();
+  url.getClient();
+
+  EXPECT_TRUE(injectedCalled);
+}
+
+TEST(UrlsClientLayered, ClearInstanceFactoryFallsBackToDefault) {
+  bool defaultCalled = false;
+  bool instanceCalled = false;
+
+  URLs::setDefaultFactory([&](bool /*secure*/) -> std::shared_ptr<Client> {
+    defaultCalled = true;
+    return std::make_shared<MockClient>();
+  });
+
+  URLs url("https://example.com/path");
+  url.isValid();
+  url.setInstanceFactory([&](bool /*secure*/) -> std::shared_ptr<Client> {
+    instanceCalled = true;
+    return std::make_shared<MockClient>();
+  });
+  url.setInstanceFactory(nullptr);
+  url.getClient();
+
+  EXPECT_TRUE(defaultCalled);
+  EXPECT_FALSE(instanceCalled);
+
+  URLs::setDefaultFactory(nullptr);
+}
+
+TEST(UrlsClientLayered, InstanceFactorySecureFlagHttps) {
+  bool calledWithSecure = false;
+
+  URLs url("https://example.com/path");
+  url.isValid();
+  url.setInstanceFactory([&](bool secure) -> std::shared_ptr<Client> {
+    calledWithSecure = secure;
+    return std::make_shared<MockClient>();
+  });
+  url.getClient();
+
+  EXPECT_TRUE(calledWithSecure);
+}
+
+TEST(UrlsClientLayered, InstanceFactorySecureFlagHttp) {
+  bool calledWithSecure = true;
+
+  URLs url("http://example.com/path");
+  url.isValid();
+  url.setInstanceFactory([&](bool secure) -> std::shared_ptr<Client> {
+    calledWithSecure = secure;
+    return std::make_shared<MockClient>();
+  });
+  url.getClient();
+
+  EXPECT_FALSE(calledWithSecure);
+}
+
+TEST(UrlsClientLayered, InstanceFactoryIsolatedBetweenObjects) {
+  bool instanceCalled = false;
+  bool defaultCalled = false;
+
+  URLs::setDefaultFactory([&](bool /*secure*/) -> std::shared_ptr<Client> {
+    defaultCalled = true;
+    return std::make_shared<MockClient>();
+  });
+
+  URLs urlA("https://example.com/path");
+  urlA.isValid();
+  urlA.setInstanceFactory([&](bool /*secure*/) -> std::shared_ptr<Client> {
+    instanceCalled = true;
+    return std::make_shared<MockClient>();
+  });
+
+  URLs urlB("https://other.com/path");
+  urlB.isValid();
+  urlB.getClient();
+
+  // urlB has no instance factory — must use default, not urlA's instance factory
+  EXPECT_TRUE(defaultCalled);
+  EXPECT_FALSE(instanceCalled);
+
+  URLs::setDefaultFactory(nullptr);
+}
+
+// ---------------------------------------------------------------------------
+// setAddress stale-state bugs
+// ---------------------------------------------------------------------------
+
+TEST(UrlsSetAddress, StaleStateCleared) {
+  URLs url("http://host-a.com/path");
+  url.isValid();
+  EXPECT_STREQ(url.getDomain(), "host-a.com");
+
+  url.setAddress("https://host-b.com/path");
+  // After setAddress, parsed fields must be cleared (isValid not called yet)
+  EXPECT_STREQ(url.getDomain(), "");
+
+  url.isValid();
+  // After isValid with new address, domain must reflect new URL
+  EXPECT_STREQ(url.getDomain(), "host-b.com");
+}
+
+TEST(UrlsSetAddress, GetPortUnknownReturnsMinusOne) {
+  URLs url("https://example.com/path");
+  // isValid() not called — _type stays UNKNOWN
+  EXPECT_EQ(url.getPort(), -1);
+}
+
+TEST(UrlsSetAddress, GetClientUnparsedReturnsNull) {
+  URLs::setDefaultFactory([](bool /*secure*/) -> std::shared_ptr<Client> {
+    return std::make_shared<MockClient>();
+  });
+
+  URLs url("https://example.com/path");
+  // isValid() not called — _type stays UNKNOWN — getClient() must return nullptr
+  EXPECT_EQ(url.getClient(), nullptr);
+
+  URLs::setDefaultFactory(nullptr);
 }

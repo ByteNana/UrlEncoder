@@ -11,6 +11,8 @@
 
 #include <functional>
 #include <memory>
+#include <string>
+#include <utility>
 
 enum class URLType : uint8_t { HTTP, HTTPS, UNKNOWN };
 
@@ -22,25 +24,66 @@ class URLs {
   URLType _type = URLType::UNKNOWN;
   int _port = -1;
 
-  static std::function<std::shared_ptr<Client>(bool secure)> _clientFactory;
+  static std::function<std::shared_ptr<Client>(bool secure)> _defaultFactory;
+  std::function<std::shared_ptr<Client>(bool secure)> _instanceFactory = nullptr;
 
   std::string extractProtocol();
   std::string extractDomain();
   std::string extractPath();
   int extractPort();
 
+  void resetParsed() {
+    _protocol.clear();
+    _domain.clear();
+    _path.clear();
+    _port = -1;
+    _type = URLType::UNKNOWN;
+  };
+
  public:
   URLs(const char *address) : _address(address) {};
+  URLs(const char *address, std::function<std::shared_ptr<Client>(bool secure)> factory)
+      : _address(address), _instanceFactory(std::move(factory)) {};
   URLs(const String &address) : _address(address.c_str()) {};
+  URLs(const String &address, std::function<std::shared_ptr<Client>(bool secure)> factory)
+      : _address(address.c_str()), _instanceFactory(std::move(factory)) {};
+  URLs(const std::string &address) : _address(address) {};
+  URLs(std::string address, std::function<std::shared_ptr<Client>(bool secure)> factory)
+      : _address(std::move(address)), _instanceFactory(std::move(factory)) {};
+  URLs(std::string &&address) : _address(std::move(address)) {};
   URLs() = default;
 
-  static void setClientFactory(
+  static void setDefaultFactory(
       std::function<std::shared_ptr<Client>(bool secure)> factory) noexcept;
+
+  [[deprecated("Use setDefaultFactory() instead")]]
+  static void setClientFactory(
+      std::function<std::shared_ptr<Client>(bool secure)> factory) noexcept {
+    setDefaultFactory(std::move(factory));
+  };
+
+  void setInstanceFactory(std::function<std::shared_ptr<Client>(bool secure)> factory) noexcept {
+    _instanceFactory = std::move(factory);
+  };
 
   bool isValid();
   bool encode();
-  void setAddress(const char *address) { _address = address; };
-  void setAddress(const String &address) { _address = address.c_str(); };
+  void setAddress(const std::string &address) {
+    _address = address;
+    resetParsed();
+  };
+  void setAddress(std::string &&address) {
+    _address = std::move(address);
+    resetParsed();
+  };
+  void setAddress(const char *address) {
+    _address = address;
+    resetParsed();
+  };
+  void setAddress(const String &address) {
+    _address = address.c_str();
+    resetParsed();
+  };
   const char *getProtocol() { return _protocol.c_str(); };
   const char *getDomain() { return _domain.c_str(); };
   const char *getAddress() { return _address.c_str(); };
@@ -48,6 +91,7 @@ class URLs {
   URLType getType() { return _type; };
   bool isSecure() { return _type == URLType::HTTPS; };
   int getPort() {
+    if (_type == URLType::UNKNOWN) return -1;
     if (_port != -1) return _port;
     return _type == URLType::HTTP ? 80 : 443;
   };

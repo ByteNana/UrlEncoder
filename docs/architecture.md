@@ -14,7 +14,8 @@ URLs
 ├── _path      std::string   path + query string
 ├── _port      int           explicit port, or -1
 ├── _type      URLType       HTTP | HTTPS | UNKNOWN
-└── _clientFactory  static  std::function<shared_ptr<Client>(bool)>
+├── _defaultFactory   static  std::function<shared_ptr<Client>(bool)>
+└── _instanceFactory          std::function<shared_ptr<Client>(bool)>
 ```
 
 All fields start empty / sentinel (`_type = UNKNOWN`, `_port = -1`). They are populated only when `isValid()` or `encode()` is called — never in the constructor.
@@ -32,10 +33,11 @@ extractPort()      ──►  reads "host:port" segment, validates 1-65535
    │
    ▼
 isValid()  assembles parsed fields, rejects unknown protocol /
-           missing domain dot / spaces in the address
+           missing domain dot / spaces in the address /
+           explicitly specified but out-of-range port
 ```
 
-`isValid()` is intentionally destructive-accumulating: it overwrites `_protocol`, `_domain`, `_path`, `_port`, and `_type` every time it is called, which makes re-validation after `setAddress()` safe.
+`isValid()` uses a validate-then-commit pattern: it calls `resetParsed()` first, then validates each component into local variables, and only assigns to member fields (`_protocol`, `_domain`, `_path`, `_port`, `_type`) when all checks pass. A failed intermediate check leaves all fields at their reset defaults — no partial state.
 
 ## encode()
 
@@ -56,18 +58,36 @@ Because `encode()` calls `isValid()` internally, the parsed fields (`_domain`, `
 
 ## Client factory pattern
 
-The library is decoupled from any specific network stack. The application registers a factory once at startup:
+The library is decoupled from any specific network stack. Factory resolution follows a two-level priority chain: **instance factory → default factory**.
+
+### Default factory (static, shared)
+
+Registered once at boot and shared across all `URLs` instances:
 
 ```cpp
-URLs::setClientFactory([](bool secure) -> std::shared_ptr<Client> {
+URLs::setDefaultFactory([](bool secure) -> std::shared_ptr<Client> {
   if (secure) return std::make_shared<WiFiClientSecure>();
   return std::make_shared<WiFiClient>();
 });
 ```
 
-`getClient()` calls `_clientFactory(_type == URLType::HTTPS)`, so the caller never needs to inspect the protocol — the factory receives a single `bool` that carries the security requirement. The factory is a `static` member so it is shared across all `URLs` instances in a translation unit.
+### Instance factory (per-object)
 
-`getClient()` returns `nullptr` (and logs an error) if the factory has not been set.
+Overrides the default for a specific instance. Can be set after construction or injected at construction time:
+
+```cpp
+// post-construction
+url.setInstanceFactory([](bool secure) -> std::shared_ptr<Client> { ... });
+
+// constructor injection
+URLs url("https://example.com/path", [](bool secure) -> std::shared_ptr<Client> { ... });
+```
+
+Passing `nullptr` to `setInstanceFactory()` clears the instance override and falls back to the default.
+
+### Resolution in `getClient()`
+
+`getClient()` returns `nullptr` (and logs an error) if `isValid()` has not been called yet (`_type == UNKNOWN`). Otherwise it picks the active factory — instance if set, default otherwise — and calls it with `isSecure()` as the `bool` argument, so the caller never needs to inspect the protocol directly.
 
 ## Design decisions
 
@@ -93,3 +113,5 @@ Test groups:
 | `UrlsGetters` | parsed field values after `isValid()` |
 | `UrlsEncode` | space/special-char encoding, query-string preservation, address update |
 | `UrlsClient` | factory null guard, `secure=true` for HTTPS, `secure=false` for HTTP |
+| `UrlsClientLayered` | instance overrides default, constructor injection, fallback on clear, `secure` flag through instance path, isolation between objects |
+| `UrlsSetAddress` | stale-state cleared on `setAddress()`, `-1` port and `nullptr` client before `isValid()` |
