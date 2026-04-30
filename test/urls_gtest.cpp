@@ -20,6 +20,23 @@ class MockClient : public Client {
 };
 
 // ---------------------------------------------------------------------------
+// Constructors
+// ---------------------------------------------------------------------------
+
+TEST(UrlsConstructors, StdStringConstructor) {
+  std::string addr("https://example.com/path");
+  URLs url(addr);
+  EXPECT_TRUE(url.isValid());
+  EXPECT_STREQ(url.getDomain(), "example.com");
+}
+
+TEST(UrlsConstructors, StdStringSetAddress) {
+  URLs url;
+  url.setAddress(std::string("http://example.com/path"));
+  EXPECT_TRUE(url.isValid());
+}
+
+// ---------------------------------------------------------------------------
 // isValid
 // ---------------------------------------------------------------------------
 

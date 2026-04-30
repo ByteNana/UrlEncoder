@@ -18,38 +18,9 @@ pre-commit:
       run: make lint
 
 pre-push:
-  commands:
-    branch-protection:
+  scripts:
+    "branch-protection.sh":
       use_stdin: true
-      run: |
-        BRANCH=$(git rev-parse --abbrev-ref HEAD)
-        if [ "$BRANCH" = "master" ]; then
-          echo "  ERROR: Direct pushes to 'master' are not allowed. Use a PR with squash-merge instead."
-          exit 1
-        fi
-        if [[ "$BRANCH" == rc-* ]]; then
-          ZERO="0000000000000000000000000000000000000000"
-          while read -r local_ref local_oid remote_ref remote_oid; do
-            [ "$local_oid" = "$ZERO" ] && continue
-            [ "$remote_oid" = "$ZERO" ] && continue
-            if ! git merge-base --is-ancestor "$remote_oid" "$local_oid" 2>/dev/null; then
-              echo "  ERROR: Force push to '${BRANCH}' is not allowed."
-              exit 1
-            fi
-          done
-        fi
-
-    version-validation:
-      run: |
-        BRANCH=$(git rev-parse --abbrev-ref HEAD)
-        [[ "$BRANCH" != rc-* ]] && exit 0
-        EXPECTED="${BRANCH#rc-}"
-        ACTUAL=$(grep -oE 'project\s*\([^)]*VERSION\s+[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-        if [ -z "$ACTUAL" ]; then
-          echo "  ERROR: Could not extract VERSION from CMakeLists.txt"
-          exit 1
-        fi
-        if [ "$ACTUAL" != "$EXPECTED" ]; then
-          echo "  ERROR: Version mismatch — branch expects ${EXPECTED}, CMakeLists.txt has ${ACTUAL}"
-          exit 1
-        fi
+      runner: bash
+    "version-validation.sh":
+      runner: bash
