@@ -40,10 +40,10 @@ class URLs {
   };
 
  public:
-  URLs(const char *address) : _address(address) { resetParsed(); };
-  URLs(const String &address) : _address(address.c_str()) { resetParsed(); };
-  URLs(const std::string &address) : _address(address) { resetParsed(); };
-  URLs(std::string &&address) : _address(std::move(address)) { resetParsed(); };
+  URLs(const char *address) : _address(address) {};
+  URLs(const String &address) : _address(address.c_str()) {};
+  URLs(const std::string &address) : _address(address) {};
+  URLs(std::string &&address) : _address(std::move(address)) {};
   URLs() = default;
 
   static void setClientFactory(
