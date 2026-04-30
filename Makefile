@@ -14,7 +14,7 @@ CLANG_FORMAT_VERSION := 20.1.8
 
 PART ?= patch
 
-.PHONY: all build test examples check lint install-deps clean bump
+.PHONY: all build test examples check format lint install-deps clean bump
 
 all: build
 
@@ -32,6 +32,9 @@ examples:
 
 check:
 	find src examples -name "*.cpp" -o -name "*.h" | xargs clang-format --dry-run --Werror
+
+format:
+	find src examples -name "*.cpp" -o -name "*.h" | xargs clang-format -i
 
 lint:
 	@test -f $(BUILD_DIR)/compile_commands.json || (echo "Run 'make build' first to generate compile_commands.json" && exit 1)

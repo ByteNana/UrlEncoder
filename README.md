@@ -7,7 +7,7 @@ Arduino/ESP32 library for parsing, validating, and percent-encoding HTTP/HTTPS U
 - Parses protocol, domain, path, and port from a URL string
 - Validates HTTP/HTTPS scheme, domain format, and absence of unencoded spaces
 - Percent-encodes unsafe characters in place, preserving query-string delimiters (`?`, `&`, `=`, `#`)
-- Returns a `std::shared_ptr<Client>` via a static factory — decoupled from any specific network stack
+- Returns a `std::shared_ptr<Client>` via a layered factory — a static default shared across all instances, overridable per-instance or at construction time
 - C++11, no heap allocation beyond `std::string`
 
 ## Installation
@@ -38,7 +38,7 @@ target_link_libraries(your_target PRIVATE UrlEncoder)
 #include "Urls.h"
 
 // Call once at boot, before any URLs instance is used
-URLs::setClientFactory([](bool secure) -> std::shared_ptr<Client> {
+URLs::setDefaultFactory([](bool secure) -> std::shared_ptr<Client> {
   if (secure) return std::make_shared<WiFiClientSecure>();
   return std::make_shared<WiFiClient>();
 });
@@ -100,13 +100,23 @@ url.getAddress()   // current address string (encoded after encode())
 
 ### Client factory
 
+The factory resolves in priority order: **instance factory → default factory**.
+
 ```cpp
-URLs::setClientFactory([](bool secure) -> std::shared_ptr<Client> {
-  ...
+// Global default — shared across all URLs instances (set once at boot)
+URLs::setDefaultFactory([](bool secure) -> std::shared_ptr<Client> {
+  if (secure) return std::make_shared<WiFiClientSecure>();
+  return std::make_shared<WiFiClient>();
 });
+
+// Per-instance override — set after construction or injected at construction
+url.setClientFactory([](bool secure) -> std::shared_ptr<Client> { ... });
+
+// Constructor injection — instance factory set at construction time
+URLs url("https://example.com/path", [](bool secure) -> std::shared_ptr<Client> { ... });
 ```
 
-Set once. All `URLs` instances share it. Pass `nullptr` to clear.
+Pass `nullptr` to either to clear it. Clearing the instance factory falls back to the default.
 
 ## Development
 

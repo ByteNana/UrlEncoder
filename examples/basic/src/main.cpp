@@ -7,7 +7,7 @@
 void setup() {
   Serial.begin(115200);
 
-  URLs::setClientFactory([](bool secure) -> std::shared_ptr<Client> {
+  URLs::setDefaultFactory([](bool secure) -> std::shared_ptr<Client> {
     if (secure) { return std::make_shared<WiFiClientSecure>(); }
     return std::make_shared<WiFiClient>();
   });

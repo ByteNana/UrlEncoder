@@ -2,10 +2,10 @@
 
 #include <esp_log.h>
 
-std::function<std::shared_ptr<Client>(bool secure)> URLs::_clientFactory = nullptr;
+std::function<std::shared_ptr<Client>(bool secure)> URLs::_defaultFactory = nullptr;
 
-void URLs::setClientFactory(std::function<std::shared_ptr<Client>(bool secure)> factory) noexcept {
-  _clientFactory = std::move(factory);
+void URLs::setDefaultFactory(std::function<std::shared_ptr<Client>(bool secure)> factory) noexcept {
+  _defaultFactory = std::move(factory);
 }
 
 std::string URLs::extractProtocol() {
@@ -141,13 +141,15 @@ bool URLs::encode() {
 }
 
 std::shared_ptr<Client> URLs::getClient() {
-  if (!_clientFactory) {
-    log_e("No client factory set. Call URLs::setClientFactory() first.\n");
-    return nullptr;
-  }
   if (_type == URLType::UNKNOWN) {
     log_e("URL not yet parsed. Call isValid() first.\n");
     return nullptr;
   }
-  return _clientFactory(_type == URLType::HTTPS);
+  auto &factory = _instanceFactory ? _instanceFactory : _defaultFactory;
+  if (!factory) {
+    log_e(
+        "No client factory set. Call URLs::setDefaultFactory() or url.setClientFactory() first.\n");
+    return nullptr;
+  }
+  return factory(isSecure());
 }
