@@ -24,7 +24,8 @@ class URLs {
   URLType _type = URLType::UNKNOWN;
   int _port = -1;
 
-  static std::function<std::shared_ptr<Client>(bool secure)> _clientFactory;
+  static std::function<std::shared_ptr<Client>(bool secure)> _defaultFactory;
+  std::function<std::shared_ptr<Client>(bool secure)> _instanceFactory = nullptr;
 
   std::string extractProtocol();
   std::string extractDomain();
@@ -41,13 +42,23 @@ class URLs {
 
  public:
   URLs(const char *address) : _address(address) {};
+  URLs(const char *address, std::function<std::shared_ptr<Client>(bool secure)> factory)
+      : _address(address), _instanceFactory(std::move(factory)) {};
   URLs(const String &address) : _address(address.c_str()) {};
+  URLs(const String &address, std::function<std::shared_ptr<Client>(bool secure)> factory)
+      : _address(address.c_str()), _instanceFactory(std::move(factory)) {};
   URLs(const std::string &address) : _address(address) {};
+  URLs(std::string address, std::function<std::shared_ptr<Client>(bool secure)> factory)
+      : _address(std::move(address)), _instanceFactory(std::move(factory)) {};
   URLs(std::string &&address) : _address(std::move(address)) {};
   URLs() = default;
 
-  static void setClientFactory(
+  static void setDefaultFactory(
       std::function<std::shared_ptr<Client>(bool secure)> factory) noexcept;
+
+  void setClientFactory(std::function<std::shared_ptr<Client>(bool secure)> factory) noexcept {
+    _instanceFactory = std::move(factory);
+  };
 
   bool isValid();
   bool encode();

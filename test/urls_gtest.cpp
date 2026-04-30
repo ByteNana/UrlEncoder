@@ -232,7 +232,7 @@ TEST(UrlsEncode, UpdatesAddress) {
 // ---------------------------------------------------------------------------
 
 TEST(UrlsClient, ReturnsNullWithoutFactory) {
-  URLs::setClientFactory(nullptr);
+  URLs::setDefaultFactory(nullptr);
   URLs url("https://example.com/path");
   url.isValid();
   EXPECT_EQ(url.getClient(), nullptr);
@@ -240,7 +240,7 @@ TEST(UrlsClient, ReturnsNullWithoutFactory) {
 
 TEST(UrlsClient, FactoryCalledWithSecureTrueForHttps) {
   bool calledWithSecure = false;
-  URLs::setClientFactory([&](bool secure) -> std::shared_ptr<Client> {
+  URLs::setDefaultFactory([&](bool secure) -> std::shared_ptr<Client> {
     calledWithSecure = secure;
     return std::make_shared<MockClient>();
   });
@@ -252,12 +252,12 @@ TEST(UrlsClient, FactoryCalledWithSecureTrueForHttps) {
   EXPECT_TRUE(calledWithSecure);
   EXPECT_NE(client, nullptr);
 
-  URLs::setClientFactory(nullptr);
+  URLs::setDefaultFactory(nullptr);
 }
 
 TEST(UrlsClient, FactoryCalledWithSecureFalseForHttp) {
   bool calledWithSecure = true;
-  URLs::setClientFactory([&](bool secure) -> std::shared_ptr<Client> {
+  URLs::setDefaultFactory([&](bool secure) -> std::shared_ptr<Client> {
     calledWithSecure = secure;
     return std::make_shared<MockClient>();
   });
@@ -269,7 +269,68 @@ TEST(UrlsClient, FactoryCalledWithSecureFalseForHttp) {
   EXPECT_FALSE(calledWithSecure);
   EXPECT_NE(client, nullptr);
 
-  URLs::setClientFactory(nullptr);
+  URLs::setDefaultFactory(nullptr);
+}
+
+// ---------------------------------------------------------------------------
+// getClient / layered factory resolution
+// ---------------------------------------------------------------------------
+
+TEST(UrlsClientLayered, InstanceFactoryOverridesDefault) {
+  bool defaultCalled = false;
+  bool instanceCalled = false;
+
+  URLs::setDefaultFactory([&](bool /*secure*/) -> std::shared_ptr<Client> {
+    defaultCalled = true;
+    return std::make_shared<MockClient>();
+  });
+
+  URLs url("https://example.com/path");
+  url.isValid();
+  url.setClientFactory([&](bool /*secure*/) -> std::shared_ptr<Client> {
+    instanceCalled = true;
+    return std::make_shared<MockClient>();
+  });
+
+  auto client = url.getClient();
+
+  EXPECT_TRUE(instanceCalled);
+  EXPECT_FALSE(defaultCalled);
+  EXPECT_NE(client, nullptr);
+
+  URLs::setDefaultFactory(nullptr);
+}
+
+TEST(UrlsClientLayered, DefaultFactoryUsedWhenNoInstance) {
+  bool defaultCalled = false;
+
+  URLs::setDefaultFactory([&](bool /*secure*/) -> std::shared_ptr<Client> {
+    defaultCalled = true;
+    return std::make_shared<MockClient>();
+  });
+
+  URLs url("https://example.com/path");
+  url.isValid();
+  auto client = url.getClient();
+
+  EXPECT_TRUE(defaultCalled);
+  EXPECT_NE(client, nullptr);
+
+  URLs::setDefaultFactory(nullptr);
+}
+
+TEST(UrlsClientLayered, ConstructorInjection) {
+  bool injectedCalled = false;
+
+  URLs url("https://example.com/path", [&](bool /*secure*/) -> std::shared_ptr<Client> {
+    injectedCalled = true;
+    return std::make_shared<MockClient>();
+  });
+  url.isValid();
+  auto client = url.getClient();
+
+  EXPECT_TRUE(injectedCalled);
+  EXPECT_NE(client, nullptr);
 }
 
 // ---------------------------------------------------------------------------
@@ -297,7 +358,7 @@ TEST(UrlsSetAddress, GetPortUnknownReturnsMinusOne) {
 }
 
 TEST(UrlsSetAddress, GetClientUnparsedReturnsNull) {
-  URLs::setClientFactory([](bool /*secure*/) -> std::shared_ptr<Client> {
+  URLs::setDefaultFactory([](bool /*secure*/) -> std::shared_ptr<Client> {
     return std::make_shared<MockClient>();
   });
 
@@ -305,5 +366,5 @@ TEST(UrlsSetAddress, GetClientUnparsedReturnsNull) {
   // isValid() not called — _type stays UNKNOWN — getClient() must return nullptr
   EXPECT_EQ(url.getClient(), nullptr);
 
-  URLs::setClientFactory(nullptr);
+  URLs::setDefaultFactory(nullptr);
 }
