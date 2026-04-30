@@ -1,0 +1,24 @@
+# Build
+build/
+/tmp/UrlEncoder-build/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# Clangd
+.cache/
+
+# Lefthook local overrides
+.lefthook-local.yml
+
+# OS
+.DS_Store
+Thumbs.db

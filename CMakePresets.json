@@ -1,0 +1,19 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "default",
+      "binaryDir": "/tmp/UrlEncoder-build",
+      "cacheVariables": {
+        "BUILD_TESTING": "OFF"
+      }
+    },
+    {
+      "name": "test",
+      "binaryDir": "/tmp/UrlEncoder-build",
+      "cacheVariables": {
+        "BUILD_TESTING": "ON"
+      }
+    }
+  ]
+}
