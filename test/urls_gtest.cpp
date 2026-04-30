@@ -333,6 +333,121 @@ TEST(UrlsClientLayered, ConstructorInjection) {
   EXPECT_NE(client, nullptr);
 }
 
+TEST(UrlsClientLayered, ConstructorInjectionOverridesDefault) {
+  bool defaultCalled = false;
+  bool injectedCalled = false;
+
+  URLs::setDefaultFactory([&](bool /*secure*/) -> std::shared_ptr<Client> {
+    defaultCalled = true;
+    return std::make_shared<MockClient>();
+  });
+
+  URLs url("https://example.com/path", [&](bool /*secure*/) -> std::shared_ptr<Client> {
+    injectedCalled = true;
+    return std::make_shared<MockClient>();
+  });
+  url.isValid();
+  url.getClient();
+
+  EXPECT_TRUE(injectedCalled);
+  EXPECT_FALSE(defaultCalled);
+
+  URLs::setDefaultFactory(nullptr);
+}
+
+TEST(UrlsClientLayered, ConstructorInjectionStdString) {
+  bool injectedCalled = false;
+  std::string addr("https://example.com/path");
+
+  URLs url(addr, [&](bool /*secure*/) -> std::shared_ptr<Client> {
+    injectedCalled = true;
+    return std::make_shared<MockClient>();
+  });
+  url.isValid();
+  url.getClient();
+
+  EXPECT_TRUE(injectedCalled);
+}
+
+TEST(UrlsClientLayered, ClearInstanceFactoryFallsBackToDefault) {
+  bool defaultCalled = false;
+  bool instanceCalled = false;
+
+  URLs::setDefaultFactory([&](bool /*secure*/) -> std::shared_ptr<Client> {
+    defaultCalled = true;
+    return std::make_shared<MockClient>();
+  });
+
+  URLs url("https://example.com/path");
+  url.isValid();
+  url.setClientFactory([&](bool /*secure*/) -> std::shared_ptr<Client> {
+    instanceCalled = true;
+    return std::make_shared<MockClient>();
+  });
+  url.setClientFactory(nullptr);
+  url.getClient();
+
+  EXPECT_TRUE(defaultCalled);
+  EXPECT_FALSE(instanceCalled);
+
+  URLs::setDefaultFactory(nullptr);
+}
+
+TEST(UrlsClientLayered, InstanceFactorySecureFlagHttps) {
+  bool calledWithSecure = false;
+
+  URLs url("https://example.com/path");
+  url.isValid();
+  url.setClientFactory([&](bool secure) -> std::shared_ptr<Client> {
+    calledWithSecure = secure;
+    return std::make_shared<MockClient>();
+  });
+  url.getClient();
+
+  EXPECT_TRUE(calledWithSecure);
+}
+
+TEST(UrlsClientLayered, InstanceFactorySecureFlagHttp) {
+  bool calledWithSecure = true;
+
+  URLs url("http://example.com/path");
+  url.isValid();
+  url.setClientFactory([&](bool secure) -> std::shared_ptr<Client> {
+    calledWithSecure = secure;
+    return std::make_shared<MockClient>();
+  });
+  url.getClient();
+
+  EXPECT_FALSE(calledWithSecure);
+}
+
+TEST(UrlsClientLayered, InstanceFactoryIsolatedBetweenObjects) {
+  bool instanceCalled = false;
+  bool defaultCalled = false;
+
+  URLs::setDefaultFactory([&](bool /*secure*/) -> std::shared_ptr<Client> {
+    defaultCalled = true;
+    return std::make_shared<MockClient>();
+  });
+
+  URLs urlA("https://example.com/path");
+  urlA.isValid();
+  urlA.setClientFactory([&](bool /*secure*/) -> std::shared_ptr<Client> {
+    instanceCalled = true;
+    return std::make_shared<MockClient>();
+  });
+
+  URLs urlB("https://other.com/path");
+  urlB.isValid();
+  urlB.getClient();
+
+  // urlB has no instance factory — must use default, not urlA's instance factory
+  EXPECT_TRUE(defaultCalled);
+  EXPECT_FALSE(instanceCalled);
+
+  URLs::setDefaultFactory(nullptr);
+}
+
 // ---------------------------------------------------------------------------
 // setAddress stale-state bugs
 // ---------------------------------------------------------------------------
