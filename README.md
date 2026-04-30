@@ -110,13 +110,13 @@ URLs::setDefaultFactory([](bool secure) -> std::shared_ptr<Client> {
 });
 
 // Per-instance override — set after construction or injected at construction
-url.setClientFactory([](bool secure) -> std::shared_ptr<Client> { ... });
+url.setInstanceFactory([](bool secure) -> std::shared_ptr<Client> { ... });
 
 // Constructor injection — instance factory set at construction time
 URLs url("https://example.com/path", [](bool secure) -> std::shared_ptr<Client> { ... });
 ```
 
-Pass `nullptr` to either to clear it. Clearing the instance factory falls back to the default.
+Pass `nullptr` to `setInstanceFactory()` to clear the per-instance override and fall back to the default. Pass `nullptr` to `setDefaultFactory()` to remove the global factory entirely — no fallback exists in that case.
 
 ## Development
 

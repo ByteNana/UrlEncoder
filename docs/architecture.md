@@ -77,13 +77,13 @@ Overrides the default for a specific instance. Can be set after construction or 
 
 ```cpp
 // post-construction
-url.setClientFactory([](bool secure) -> std::shared_ptr<Client> { ... });
+url.setInstanceFactory([](bool secure) -> std::shared_ptr<Client> { ... });
 
 // constructor injection
 URLs url("https://example.com/path", [](bool secure) -> std::shared_ptr<Client> { ... });
 ```
 
-Passing `nullptr` to `setClientFactory()` clears the instance override and falls back to the default.
+Passing `nullptr` to `setInstanceFactory()` clears the instance override and falls back to the default.
 
 ### Resolution in `getClient()`
 
