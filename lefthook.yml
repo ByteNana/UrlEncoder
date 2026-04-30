@@ -3,6 +3,8 @@
 #
 # Local overrides: create .lefthook-local.yml (gitignored)
 
+shell: bash
+
 commit-msg:
   commands:
     convco:
