@@ -42,6 +42,8 @@ class URLs {
  public:
   URLs(const char *address) : _address(address) { resetParsed(); };
   URLs(const String &address) : _address(address.c_str()) { resetParsed(); };
+  URLs(const std::string &address) : _address(address) { resetParsed(); };
+  URLs(std::string &&address) : _address(std::move(address)) { resetParsed(); };
   URLs() = default;
 
   static void setClientFactory(
