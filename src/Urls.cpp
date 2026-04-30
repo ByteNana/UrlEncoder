@@ -126,7 +126,12 @@ bool URLs::encode() {
   std::string encoded;
   const char *msg = _address.c_str();
   while (*msg != '\0') {
-    if ((isalnum(*msg) != 0) || *msg == '-' || *msg == '_' || *msg == '.' || *msg == '~' ||
+    if (*msg == '%' && (isxdigit(*(msg + 1)) != 0) && (isxdigit(*(msg + 2)) != 0)) {
+      encoded += *msg++;
+      encoded += *msg++;
+      encoded += *msg;
+    } else if (
+        (isalnum(*msg) != 0) || *msg == '-' || *msg == '_' || *msg == '.' || *msg == '~' ||
         *msg == '/' || *msg == ':' || *msg == '?' || *msg == '&' || *msg == '=' || *msg == '#') {
       encoded += *msg;
     } else {
