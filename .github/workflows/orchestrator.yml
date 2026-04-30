@@ -1,0 +1,14 @@
+name: Orchestrator
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: ['rc-*', master]
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+
+  examples:
+    uses: ./.github/workflows/examples.yml
