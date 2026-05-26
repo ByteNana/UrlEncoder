@@ -4,7 +4,6 @@ on:
   workflow_run:
     workflows: ["Orchestrator"]
     types: [completed]
-    branches: ['rc-*']
 
 jobs:
   check:
