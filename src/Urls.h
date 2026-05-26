@@ -56,6 +56,8 @@ class URLs {
   static void setDefaultFactory(
       std::function<std::shared_ptr<Client>(bool secure)> factory) noexcept;
 
+  static void setMockClient(const std::shared_ptr<Client> &client) noexcept;
+
   [[deprecated("Use setDefaultFactory() instead")]]
   static void setClientFactory(
       std::function<std::shared_ptr<Client>(bool secure)> factory) noexcept {

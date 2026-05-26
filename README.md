@@ -118,6 +118,47 @@ URLs url("https://example.com/path", [](bool secure) -> std::shared_ptr<Client> 
 
 Pass `nullptr` to `setInstanceFactory()` to clear the per-instance override and fall back to the default. Pass `nullptr` to `setDefaultFactory()` to remove the global factory entirely — no fallback exists in that case.
 
+## Testing with mocks
+
+The factory pattern makes `URLs` testable without real network clients. In a GoogleTest `SetUp()`, use `setDefaultFactory()` to inject a mock:
+
+```cpp
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
+#include "Urls.h"
+
+class MockClient : public Client {
+ public:
+  MOCK_METHOD(int, connect, (IPAddress ip, uint16_t port), (override));
+  MOCK_METHOD(int, connect, (const char *host, uint16_t port), (override));
+  // ... remaining Client methods
+};
+
+TEST(MyFeature, SendsRequestToCorrectUrl) {
+  auto mock = std::make_shared<MockClient>();
+  URLs::setMockClient(mock);  // convenience wrapper — same mock returned for HTTP and HTTPS
+
+  URLs url("https://api.example.com/v1/update");
+  url.isValid();
+  auto client = url.getClient();  // returns mock
+
+  // use client with your HTTP logic...
+
+  URLs::setDefaultFactory(nullptr);  // clean up after the test
+}
+```
+
+`setMockClient(mock)` is a shorthand for the common case where you want one fixed client regardless of the `secure` flag. For finer control (e.g. asserting a `WiFiClientSecure` is used for HTTPS), use `setDefaultFactory()` directly:
+
+```cpp
+URLs::setDefaultFactory([&](bool secure) -> std::shared_ptr<Client> {
+  EXPECT_TRUE(secure);  // assert HTTPS is required
+  return std::make_shared<MockClient>();
+});
+```
+
+Both helpers affect the global default factory, so always reset it to `nullptr` after each test to avoid state leaking between cases.
+
 ## Development
 
 ### Prerequisites
