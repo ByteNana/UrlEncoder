@@ -8,6 +8,10 @@ void URLs::setDefaultFactory(std::function<std::shared_ptr<Client>(bool secure)>
   _defaultFactory = std::move(factory);
 }
 
+void URLs::setMockClient(const std::shared_ptr<Client> &client) noexcept {
+  setDefaultFactory([client](bool) { return client; });
+}
+
 std::string URLs::extractProtocol() {
   size_t protocolEnd = _address.find("://");
   if (protocolEnd != std::string::npos) { return _address.substr(0, protocolEnd); }

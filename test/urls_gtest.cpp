@@ -245,6 +245,32 @@ TEST(UrlsEncode, PreservesExistingEscapes) {
 // getClient / factory
 // ---------------------------------------------------------------------------
 
+TEST(UrlsClient, SetMockClientReturnsSameInstance) {
+  auto mock = std::make_shared<MockClient>();
+  URLs::setMockClient(mock);
+
+  URLs url("https://example.com/path");
+  url.isValid();
+  EXPECT_EQ(url.getClient(), mock);
+
+  URLs::setDefaultFactory(nullptr);
+}
+
+TEST(UrlsClient, SetMockClientIgnoresSecureFlag) {
+  auto mock = std::make_shared<MockClient>();
+  URLs::setMockClient(mock);
+
+  URLs httpUrl("http://example.com/path");
+  httpUrl.isValid();
+  URLs httpsUrl("https://example.com/path");
+  httpsUrl.isValid();
+
+  EXPECT_EQ(httpUrl.getClient(), mock);
+  EXPECT_EQ(httpsUrl.getClient(), mock);
+
+  URLs::setDefaultFactory(nullptr);
+}
+
 TEST(UrlsClient, ReturnsNullWithoutFactory) {
   URLs::setDefaultFactory(nullptr);
   URLs url("https://example.com/path");
